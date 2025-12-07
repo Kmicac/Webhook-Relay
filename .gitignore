@@ -1,0 +1,27 @@
+# Binaries
+/bin/
+/dist/
+/build/
+
+# Go build cache
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+
+# Go coverage
+*.out
+
+# VSCode
+.vscode/
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+
+# Docker
+postgres_data/
