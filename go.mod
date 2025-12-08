@@ -1,4 +1,4 @@
-module github.com/Kmicac/webhookrelay
+module github.com/Kmicac/Webhook-Relay
 
 go 1.23.0
 

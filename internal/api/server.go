@@ -2,11 +2,14 @@ package api
 
 import (
 	"net/http"
+	"os"
 
 	"github.com/labstack/echo/v4"
 
-	"github.com/Kmicac/webhookrelay/internal/storage"
-	"github.com/Kmicac/webhookrelay/internal/webhooks"
+	"github.com/Kmicac/Webhook-Relay/internal/clients"
+	"github.com/Kmicac/Webhook-Relay/internal/payments"
+	"github.com/Kmicac/Webhook-Relay/internal/storage"
+	"github.com/Kmicac/Webhook-Relay/internal/webhooks"
 )
 
 func NewServer() *echo.Echo {
@@ -19,20 +22,29 @@ func NewServer() *echo.Echo {
 	})
 
 	// DATABASE CONNECTION
-	dsn := "postgres://webhookuser:webhookpass@localhost:5432/webhookrelay"
+	dsn := "postgres://webhookuser:webhookpass@localhost:5433/Webhook-Relay"
 	store := storage.NewPostgresStore(dsn)
 
-	// REPOSITORY 
+	// REPOSITORY
 	repo := webhooks.NewRepository(store)
 
 	// SERVICE
 	webhookService := webhooks.NewService(repo)
+	paymentRepo := payments.NewRepository(store)
+	paymentService := payments.NewService(paymentRepo)
+	clientRepo := clients.NewRepository(store)
 
-	// HANDLER 
-	webhookHandler := webhooks.NewHandler(webhookService)
+	// SECRET PARA WEBHOOKS
+	secret := os.Getenv("WEBHOOK_SECRET")
+	if secret == "" {
+		secret = "my-hiper-secret-key"
+	}
+
+	// HANDLER
+	webhookHandler := webhooks.NewHandler(webhookService, secret, paymentService, clientRepo)
 
 	// ROUTES
-	e.POST("/webhooks/payments", webhookHandler.HandlePayment)
+	e.POST("/webhooks/:client_id/:provider/payments", webhookHandler.HandlePayment)
 	e.GET("/webhooks/events", webhookHandler.ListEvents)
 
 	return e

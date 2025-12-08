@@ -3,7 +3,7 @@ package webhooks
 import (
 	"context"
 
-	"github.com/Kmicac/webhookrelay/internal/storage"
+	"github.com/Kmicac/Webhook-Relay/internal/storage"
 )
 
 type Repository struct {

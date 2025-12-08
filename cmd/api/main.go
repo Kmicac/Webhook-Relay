@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/Kmicac/webhookrelay/internal/api"
+	"github.com/Kmicac/Webhook-Relay/internal/api"
 )
 
 func main() {

@@ -25,3 +25,5 @@
 
 # Docker
 postgres_data/
+
+.env
