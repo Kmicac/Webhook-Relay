@@ -1,37 +1,65 @@
 package webhooks
 
 import (
+	"context"
 	"log"
-	"time"
+
+	"github.com/Kmicac/Webhook-Relay/internal/payments"
 )
 
 type Service struct {
-	repo *Repository
+	repo           *Repository
+	paymentService *payments.Service
 }
 
-type WebhookEvent struct {
-	ID        int64     `json:"id"`
-	Provider  string    `json:"provider"`
-	RawBody   string    `json:"raw_body"`
-	ReceivedAt time.Time `json:"received_at"`
-}
-
-func NewService(repo *Repository) *Service {
-	return &Service{repo: repo}
-}
-
-func (s *Service) SavePaymentEvent(provider string, rawBody string) WebhookEvent {
-	id, err := s.repo.Save(provider, rawBody)
-	if err != nil {
-		log.Printf("[WebhookService] Error guardando webhook: %v\n", err)
+func NewService(repo *Repository, paymentService *payments.Service) *Service {
+	return &Service{
+		repo:           repo,
+		paymentService: paymentService,
 	}
+}
 
-	return WebhookEvent{
-		ID:        id,
+func (s *Service) EnqueueEvent(provider string, rawBody string) (*WebhookEvent, error) {
+	ev := &WebhookEvent{
 		Provider:  provider,
 		RawBody:   rawBody,
-		ReceivedAt: time.Now(),
+		Processed: false,
+		Attempts:  0,
 	}
+
+	if err := s.repo.CreateEvent(ev); err != nil {
+		log.Printf("[WebhookService] error enqueuing webhook event: %v\n", err)
+		return nil, err
+	}
+
+	return ev, nil
+}
+
+func (s *Service) ProcessNextPending(ctx context.Context) (bool, error) {
+	ev, err := s.repo.FetchNextPending(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	if ev == nil {
+		return false, nil
+	}
+
+	log.Printf("[Worker] processing event id=%d provider=%s\n", ev.ID, ev.Provider)
+
+	if err := s.paymentService.Process([]byte(ev.RawBody), ev.ID, ev.Provider); err != nil {
+		log.Printf("[WebhookService] error processing event id=%d: %v\n", ev.ID, err)
+		_ = s.repo.MarkFailed(ctx, ev.ID, err.Error())
+		return true, err
+	}
+
+	if err := s.repo.MarkProcessed(ctx, ev.ID); err != nil {
+		return true, err
+	}
+
+	log.Printf("[Worker] processed event id=%d\n", ev.ID)
+
+	return true, nil
 }
 
 // ListEvents returns the events saved from the repository.

@@ -22,30 +22,36 @@ func NewServer() *echo.Echo {
 	})
 
 	// DATABASE CONNECTION
-	dsn := "postgres://webhookuser:webhookpass@localhost:5433/Webhook-Relay"
+	dsn := "postgres://webhookuser:webhookpass@localhost:5433/webhookrelay?sslmode=disable"
 	store := storage.NewPostgresStore(dsn)
 
 	// REPOSITORY
 	repo := webhooks.NewRepository(store)
 
 	// SERVICE
-	webhookService := webhooks.NewService(repo)
+	clientRepo := clients.NewRepository(store)
 	paymentRepo := payments.NewRepository(store)
 	paymentService := payments.NewService(paymentRepo)
-	clientRepo := clients.NewRepository(store)
+	webhookService := webhooks.NewService(repo, paymentService)
 
-	// SECRET PARA WEBHOOKS
-	secret := os.Getenv("WEBHOOK_SECRET")
-	if secret == "" {
-		secret = "my-hiper-secret-key"
+	// admin token
+	adminToken := os.Getenv("ADMIN_TOKEN")
+	if adminToken == "" {
+		adminToken = "dev-admin-token"
 	}
 
 	// HANDLER
-	webhookHandler := webhooks.NewHandler(webhookService, secret, paymentService, clientRepo)
+	webhookHandler := webhooks.NewHandler(webhookService, clientRepo)
+	clientHandler := clients.NewHandler(clientRepo, adminToken)
 
 	// ROUTES
 	e.POST("/webhooks/:client_id/:provider/payments", webhookHandler.HandlePayment)
 	e.GET("/webhooks/events", webhookHandler.ListEvents)
+
+	// ADMIN CLIENTS
+	adminGroup := e.Group("/admin", clientHandler.RequireAdmin)
+	adminGroup.POST("/clients", clientHandler.CreateClient)
+	adminGroup.GET("/clients", clientHandler.ListClients)
 
 	return e
 }

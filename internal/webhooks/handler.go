@@ -7,27 +7,22 @@ import (
 	"github.com/labstack/echo/v4"
 
 	"github.com/Kmicac/Webhook-Relay/internal/clients"
-	"github.com/Kmicac/Webhook-Relay/internal/payments"
 )
 
 // Handler es el controlador de webhooks de pagos.
 type Handler struct {
-	service        *Service
-	secret         []byte
-	paymentService *payments.Service
-	clientRepo     *clients.Repository
+	service    *Service
+	clientRepo *clients.Repository
 }
 
-func NewHandler(service *Service, secret string, paymentService *payments.Service, clientRepo *clients.Repository) *Handler {
+func NewHandler(service *Service, clientRepo *clients.Repository) *Handler {
 	return &Handler{
-		service:        service,
-		secret:         []byte(secret),
-		paymentService: paymentService,
-		clientRepo:     clientRepo,
+		service:    service,
+		clientRepo: clientRepo,
 	}
 }
 
-// HandlePayment recibe y procesa webhooks de pago.
+// HandlePayment recibe y encola webhooks de pago.
 func (h *Handler) HandlePayment(c echo.Context) error {
 	body, err := io.ReadAll(c.Request().Body)
 	if err != nil {
@@ -67,12 +62,15 @@ func (h *Handler) HandlePayment(c echo.Context) error {
 		})
 	}
 
-	ev := h.service.SavePaymentEvent(provider, string(body))
+	ev, err := h.service.EnqueueEvent(provider, string(body))
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{
+			"error": "failed to enqueue event",
+		})
+	}
 
-	h.paymentService.Process(body, ev.ID, provider)
-
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"status":   "received",
+	return c.JSON(http.StatusCreated, map[string]interface{}{
+		"status":   "enqueued",
 		"event_id": ev.ID,
 		"provider": ev.Provider,
 		"received": ev.ReceivedAt,

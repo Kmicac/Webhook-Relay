@@ -2,6 +2,7 @@ package payments
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"strconv"
 	"time"
@@ -26,12 +27,11 @@ func NewService(repo *Repository) *Service {
 	return &Service{repo: repo}
 }
 
-func (s *Service) Process(rawBody []byte, webhookEventID int64, provider string) {
+func (s *Service) Process(rawBody []byte, webhookEventID int64, provider string) error {
 	var payload map[string]interface{}
 
 	if err := json.Unmarshal(rawBody, &payload); err != nil {
-		log.Printf("[PaymentService] JSON inválido: %v\n", err)
-		return
+		return fmt.Errorf("invalid json: %w", err)
 	}
 
 	var event PaymentEvent
@@ -62,8 +62,10 @@ func (s *Service) Process(rawBody []byte, webhookEventID int64, provider string)
 	log.Printf("[PaymentService] Parsed PaymentEvent (%s): %+v\n", provider, event)
 
 	if err := s.repo.Save(event, webhookEventID); err != nil {
-		log.Printf("[PaymentService] error saving payment: %v\n", err)
+		return err
 	}
+
+	return nil
 }
 
 func parseMercadoPagoPayload(payload map[string]interface{}) PaymentEvent {
